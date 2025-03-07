@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MyImagination – Summary</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --primary-color: #8a2be2;
+      --secondary-color: #4169e1;
+      --text-color: #333;
+      --background-color: #f4f4f4;
+      --card-background: #ffffff;
+      --modal-background: rgba(0, 0, 0, 0.7);
+      --border-radius: 12px;
+      --transition: all 0.3s ease;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      min-height: 100vh;
+      color: #333;
+      padding: 20px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .back-button {
+      background: rgba(255, 255, 255, 0.9);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      margin-right: 12px;
+    }
+    .back-button:hover {
+      transform: translateY(-2px);
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .back-button svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--primary-color);
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .summary-container {
+      background-color: var(--card-background);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      box-shadow: 0 3px 5px rgba(0,0,0,0.1);
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .buttons-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .copy-button {
+      background: var(--primary-color);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .copy-button:hover {
+      background: #7424c1;
+      transform: translateY(-2px);
+    }
+
+    .data-section {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-top: 8px;
+      font-size: 14px;
+      color: #444;
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #e1e1e1;
+      border-radius: 8px;
+      padding: 12px;
+      background-color: #fafafa;
+    }
+
+    /* Snackbar / Toast Notification */
+    #snackbar {
+      visibility: hidden;
+      min-width: 200px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 4px;
+      padding: 10px;
+      position: fixed;
+      left: 50%;
+      bottom: 30px;
+      font-size: 14px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+      opacity: 0;
+    }
+    #snackbar.show {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Back to Dashboard Button -->
+    <button class="back-button" onclick="goBackToDashboard()" title="Back to Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M15 18l-6-6 6-6"></path>
+      </svg>
+    </button>
+    <h1 class="page-title">Summary</h1>
+  </header>
+
+  <div class="summary-container">
+    <div class="buttons-row">
+      <button class="copy-button" onclick="copyAll()">Copy All Info</button>
+      <button class="copy-button" onclick="copyIdeas()">Copy Ideas Only</button>
+      <button class="copy-button" onclick="copyComments()">Copy Comments/Replies Only</button>
+    </div>
+    <div id="summaryData" class="data-section">
+      <!-- All data combined (ideas + comments) goes here -->
+      Loading data...
+    </div>
+  </div>
+
+  <!-- Snackbar / Toast -->
+  <div id="snackbar"></div>
+
+  <!-- Firebase + Scripts -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-database.js";
+
+    // ---------------------------
+    // 1. Initialize Firebase
+    // ---------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyAOavNNa0NXASTHd--afy37aSIFYqvcacQ",
+      authDomain: "myteacheropinion.firebaseapp.com",
+      databaseURL: "https://myteacheropinion-default-rtdb.firebaseio.com",
+      projectId: "myteacheropinion",
+      storageBucket: "myteacheropinion.firebasestorage.app",
+      messagingSenderId: "945674655787",
+      appId: "1:945674655787:web:a59ef04ec9e843769bf26e"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    const database = getDatabase(app);
+
+    // ---------------------------
+    // 2. Global Data Structures
+    // ---------------------------
+    let ideasData = [];
+    let commentsData = [];
+    let allDataString = "";
+    let ideasString = "";
+    let commentsString = "";
+
+    // ---------------------------
+    // 3. Check Auth State
+    // ---------------------------
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in
+        fetchAllData();
+      } else {
+        // If not signed in, optionally show a message or redirect
+        document.getElementById('summaryData').textContent = "Please sign in to view summary data.";
+      }
+    });
+
+    // ---------------------------
+    // 4. Fetch All Data
+    // ---------------------------
+    async function fetchAllData() {
+      await fetchIdeas();
+      await fetchComments();
+      buildStrings();
+    }
+
+    // Fetch Ideas
+    function fetchIdeas() {
+      return new Promise((resolve) => {
+        const ideasRef = ref(database, "ideas");
+        onValue(ideasRef, (snapshot) => {
+          const data = snapshot.val() || {};
+          ideasData = [];
+          for (const key in data) {
+            ideasData.push({ id: key, ...data[key] });
+          }
+          resolve();
+        }, { onlyOnce: true });
+      });
+    }
+
+    // Fetch Comments
+    function fetchComments() {
+      return new Promise((resolve) => {
+        const commentsRef = ref(database, "comments");
+        onValue(commentsRef, (snapshot) => {
+          const data = snapshot.val() || {};
+          commentsData = [];
+          for (const postId in data) {
+            // Each post has multiple comments
+            for (const commentKey in data[postId]) {
+              if (commentKey === "_next") continue;
+              commentsData.push({
+                postId: postId,
+                commentId: commentKey,
+                ...data[postId][commentKey]
+              });
+            }
+          }
+          resolve();
+        }, { onlyOnce: true });
+      });
+    }
+
+    // ---------------------------
+    // 5. Build Display Strings
+    // ---------------------------
+    function buildStrings() {
+      // Ideas
+      ideasString = ideasData.map(idea => {
+        return `Idea ID: ${idea.id}
+Subject: ${idea.subject}
+Description: ${idea.description}
+Username: ${idea.username}
+Email: ${idea.email}
+Likes: ${idea.likes}
+Created: ${new Date(idea.created).toLocaleString()}
+-----------------------------------`;
+      }).join("\n");
+
+      // Comments
+      commentsString = commentsData.map(comment => {
+        // If your structure includes deeper nested replies, you'd parse them here
+        return `Post ID: ${comment.postId}
+Comment ID: ${comment.commentId}
+Commenter: ${comment.commenter || comment.replier}
+Timestamp: ${comment.timestamp}
+Content: ${comment.content}
+-----------------------------------`;
+      }).join("\n");
+
+      // Combine all
+      allDataString = "=== IDEAS ===\n\n" + ideasString + "\n\n=== COMMENTS & REPLIES ===\n\n" + commentsString;
+
+      // Show in #summaryData
+      document.getElementById('summaryData').textContent = allDataString || "No data found.";
+    }
+
+    // ---------------------------
+    // 6. Copy Functions
+    // ---------------------------
+    function copyAll() {
+      copyToClipboard(allDataString || "No data to copy.");
+    }
+    function copyIdeas() {
+      copyToClipboard(ideasString || "No ideas to copy.");
+    }
+    function copyComments() {
+      copyToClipboard(commentsString || "No comments/replies to copy.");
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showSnackbar("Copied to clipboard!");
+      }).catch(err => {
+        console.error("Error copying text: ", err);
+      });
+    }
+
+    // ---------------------------
+    // 7. Snackbar / Toast
+    // ---------------------------
+    function showSnackbar(message) {
+      const snackbar = document.getElementById('snackbar');
+      snackbar.textContent = message;
+      snackbar.classList.add('show');
+      setTimeout(() => {
+        snackbar.classList.remove('show');
+      }, 3000);
+    }
+
+    // ---------------------------
+    // 8. Navigation
+    // ---------------------------
+    function goBackToDashboard() {
+      // Adjust this link to wherever your main site is
+      window.location.href = "https://gmolter.github.io/MyImagination";
+    }
+  </script>
+</body>
+</html>
