@@ -11,9 +11,7 @@
       --primary-color: #8a2be2;
       --secondary-color: #4169e1;
       --text-color: #333;
-      --background-color: #f4f4f4;
       --card-background: #ffffff;
-      --modal-background: rgba(0, 0, 0, 0.7);
       --border-radius: 12px;
       --transition: all 0.3s ease;
     }
@@ -28,7 +26,7 @@
     body {
       background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
       min-height: 100vh;
-      color: #333;
+      color: var(--text-color);
       padding: 20px;
     }
 
@@ -105,8 +103,6 @@
       margin-top: 8px;
       font-size: 14px;
       color: #444;
-      max-height: 400px;
-      overflow-y: auto;
       border: 1px solid #e1e1e1;
       border-radius: 8px;
       padding: 12px;
@@ -128,7 +124,7 @@
       font-size: 14px;
       transform: translateX(-50%);
       z-index: 9999;
-      transition: opacity 0.5s ease, visibility 0.5s ease;
+      transition: visibility 0.5s, opacity 0.5s;
       opacity: 0;
     }
     #snackbar.show {
@@ -166,8 +162,8 @@
   <!-- Firebase + Scripts -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-database.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
+    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-database.js";
 
     // ---------------------------
     // 1. Initialize Firebase
@@ -183,12 +179,8 @@
     };
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
     const database = getDatabase(app);
 
-    // ---------------------------
-    // 2. Global Data Structures
-    // ---------------------------
     let ideasData = [];
     let commentsData = [];
     let allDataString = "";
@@ -196,20 +188,19 @@
     let commentsString = "";
 
     // ---------------------------
-    // 3. Check Auth State
+    // 2. Check Auth State
     // ---------------------------
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is signed in
         fetchAllData();
       } else {
-        // If not signed in, optionally show a message or redirect
-        document.getElementById('summaryData').textContent = "Please sign in to view summary data.";
+        document.getElementById('summaryData').textContent =
+          "Please sign in to view summary data.";
       }
     });
 
     // ---------------------------
-    // 4. Fetch All Data
+    // 3. Fetch Data (Ideas & Comments)
     // ---------------------------
     async function fetchAllData() {
       await fetchIdeas();
@@ -217,63 +208,50 @@
       buildStrings();
     }
 
-    // Fetch Ideas
-    function fetchIdeas() {
-      return new Promise((resolve) => {
-        const ideasRef = ref(database, "ideas");
-        onValue(ideasRef, (snapshot) => {
-          const data = snapshot.val() || {};
-          ideasData = [];
-          for (const key in data) {
-            ideasData.push({ id: key, ...data[key] });
-          }
-          resolve();
-        }, { onlyOnce: true });
-      });
+    async function fetchIdeas() {
+      const snapshot = await get(ref(database, "ideas"));
+      const data = snapshot.val() || {};
+      ideasData = [];
+      for (const key in data) {
+        ideasData.push({ id: key, ...data[key] });
+      }
     }
 
-    // Fetch Comments
-    function fetchComments() {
-      return new Promise((resolve) => {
-        const commentsRef = ref(database, "comments");
-        onValue(commentsRef, (snapshot) => {
-          const data = snapshot.val() || {};
-          commentsData = [];
-          for (const postId in data) {
-            // Each post has multiple comments
-            for (const commentKey in data[postId]) {
-              if (commentKey === "_next") continue;
-              commentsData.push({
-                postId: postId,
-                commentId: commentKey,
-                ...data[postId][commentKey]
-              });
-            }
-          }
-          resolve();
-        }, { onlyOnce: true });
-      });
+    async function fetchComments() {
+      const snapshot = await get(ref(database, "comments"));
+      const data = snapshot.val() || {};
+      commentsData = [];
+      for (const postId in data) {
+        for (const commentKey in data[postId]) {
+          if (commentKey === "_next") continue;
+          commentsData.push({
+            postId: postId,
+            commentId: commentKey,
+            ...data[postId][commentKey]
+          });
+        }
+      }
     }
 
     // ---------------------------
-    // 5. Build Display Strings
+    // 4. Build Strings for Display
     // ---------------------------
     function buildStrings() {
-      // Ideas
+      // Build ideasString
       ideasString = ideasData.map(idea => {
+        const createdStr = idea.created ? new Date(idea.created).toLocaleString() : "N/A";
         return `Idea ID: ${idea.id}
 Subject: ${idea.subject}
 Description: ${idea.description}
 Username: ${idea.username}
 Email: ${idea.email}
 Likes: ${idea.likes}
-Created: ${new Date(idea.created).toLocaleString()}
+Created: ${createdStr}
 -----------------------------------`;
       }).join("\n");
 
-      // Comments
+      // Build commentsString
       commentsString = commentsData.map(comment => {
-        // If your structure includes deeper nested replies, you'd parse them here
         return `Post ID: ${comment.postId}
 Comment ID: ${comment.commentId}
 Commenter: ${comment.commenter || comment.replier}
@@ -285,12 +263,13 @@ Content: ${comment.content}
       // Combine all
       allDataString = "=== IDEAS ===\n\n" + ideasString + "\n\n=== COMMENTS & REPLIES ===\n\n" + commentsString;
 
-      // Show in #summaryData
-      document.getElementById('summaryData').textContent = allDataString || "No data found.";
+      // Show the combined text
+      document.getElementById('summaryData').textContent =
+        allDataString.trim() || "No data found.";
     }
 
     // ---------------------------
-    // 6. Copy Functions
+    // 5. Copy Functions
     // ---------------------------
     function copyAll() {
       copyToClipboard(allDataString || "No data to copy.");
@@ -303,15 +282,17 @@ Content: ${comment.content}
     }
 
     function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        showSnackbar("Copied to clipboard!");
-      }).catch(err => {
-        console.error("Error copying text: ", err);
-      });
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          showSnackbar("Copied to clipboard!");
+        })
+        .catch(err => {
+          console.error("Error copying text:", err);
+        });
     }
 
     // ---------------------------
-    // 7. Snackbar / Toast
+    // 6. Snackbar / Toast
     // ---------------------------
     function showSnackbar(message) {
       const snackbar = document.getElementById('snackbar');
@@ -323,10 +304,10 @@ Content: ${comment.content}
     }
 
     // ---------------------------
-    // 8. Navigation
+    // 7. Navigation
     // ---------------------------
     function goBackToDashboard() {
-      // Adjust this link to wherever your main site is
+      // Adjust this link to your main site
       window.location.href = "https://gmolter.github.io/MyImagination";
     }
   </script>
