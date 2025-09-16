@@ -10,82 +10,86 @@
 <main class="wrap">
   <header class="header">
     <h1>Quiet Corner</h1>
-    <p class="sub">Low-key games to zone in. No accounts, no tracking.</p>
+    <p class="sub">Low-key classics. Keyboard, mouse, or touch. No tracking.</p>
   </header>
 
   <section class="grid" aria-label="Activities">
-    <!-- 2048 -->
-    <article class="card" aria-labelledby="g2048-title">
+    <!-- Snake -->
+    <article class="card" aria-labelledby="snk-title">
       <div class="card-head">
-        <h2 id="g2048-title">2048</h2>
-        <div class="pill">Slide</div>
+        <h2 id="snk-title">Snake</h2>
+        <div class="pill">Arcade</div>
       </div>
-
       <div class="row">
-        <button class="btn" id="g2048-new">New</button>
-        <button class="btn btn-ghost" id="g2048-undo" disabled>Undo</button>
-        <span class="muted counter">Score: <strong id="g2048-score">0</strong></span>
-        <span class="muted counter">Best: <strong id="g2048-best">—</strong></span>
-        <span id="g2048-status" class="muted status" role="status" aria-live="polite"></span>
+        <button class="btn" id="snk-new">New</button>
+        <button class="btn btn-ghost" id="snk-pause">Pause</button>
+        <span class="muted counter">Score: <strong id="snk-score">0</strong></span>
+        <span class="muted counter">Best: <strong id="snk-best">0</strong></span>
+        <span id="snk-status" class="muted status" role="status" aria-live="polite"></span>
       </div>
 
-      <div id="g2048-grid" class="g2048-grid" role="grid" aria-label="2048 board" tabindex="0"></div>
-      <p class="help">Use arrow keys / swipe to slide tiles.</p>
+      <div class="canvas-wrap">
+        <canvas id="snk-canvas" width="360" height="360" aria-label="Snake board"></canvas>
+      </div>
+
+      <!-- on-screen d-pad for touch -->
+      <div class="dpad" aria-hidden="true">
+        <button class="d d-up"   data-dir="up">▲</button>
+        <div class="d-row">
+          <button class="d d-left" data-dir="left">◀</button>
+          <button class="d d-right" data-dir="right">▶</button>
+        </div>
+        <button class="d d-down" data-dir="down">▼</button>
+      </div>
+      <p class="help">WASD / arrows or tap the pad. Don’t hit walls or yourself.</p>
     </article>
 
-    <!-- Match-3 -->
-    <article class="card" aria-labelledby="m3-title">
+    <!-- Minesweeper -->
+    <article class="card" aria-labelledby="msw-title">
       <div class="card-head">
-        <h2 id="m3-title">Match-3</h2>
-        <div class="pill">Swap</div>
+        <h2 id="msw-title">Minesweeper</h2>
+        <div class="pill">Logic</div>
       </div>
-
       <div class="row">
-        <button class="btn" id="m3-new">New</button>
-        <span class="muted counter">Score: <strong id="m3-score">0</strong></span>
-        <span class="muted counter">Best: <strong id="m3-best">—</strong></span>
-        <span id="m3-status" class="muted status" role="status" aria-live="polite"></span>
-      </div>
-
-      <div id="m3-grid" class="m3-grid" role="grid" aria-label="Match-3 board"></div>
-      <p class="help">Swap two neighbors to make 3+ in a row. Cascades score extra.</p>
-    </article>
-
-    <!-- Simon -->
-    <article class="card" aria-labelledby="si-title">
-      <div class="card-head">
-        <h2 id="si-title">Simon</h2>
-        <div class="pill">Memory</div>
-      </div>
-
-      <div class="row">
-        <button class="btn" id="si-start">Start</button>
-        <label class="muted">Mode
-          <select id="si-mode" aria-label="Mode">
-            <option value="relaxed" selected>Relaxed</option>
-            <option value="strict">Strict</option>
+        <button class="btn" id="msw-new">New</button>
+        <label class="muted">Size
+          <select id="msw-size" aria-label="Board size">
+            <option value="9,10" selected>9×9 / 10 mines</option>
+            <option value="12,20">12×12 / 20 mines</option>
+            <option value="16,40">16×16 / 40 mines</option>
           </select>
         </label>
-        <span class="muted counter">Level: <strong id="si-level">0</strong></span>
-        <span class="muted counter">Best: <strong id="si-best">0</strong></span>
-        <span id="si-status" class="muted status" role="status" aria-live="polite"></span>
+        <span class="muted counter">Time: <strong id="msw-time">0</strong>s</span>
+        <span class="muted counter">Mines: <strong id="msw-mines">10</strong></span>
+        <span id="msw-status" class="muted status" role="status" aria-live="polite"></span>
+      </div>
+      <div id="msw-grid" class="msw-grid" role="grid" aria-label="Minesweeper board"></div>
+      <p class="help">Left click: reveal. Right click / long-press: flag. Clear all safe tiles.</p>
+    </article>
+
+    <!-- Breakout -->
+    <article class="card" aria-labelledby="brk-title">
+      <div class="card-head">
+        <h2 id="brk-title">Breakout</h2>
+        <div class="pill">Arcade</div>
+      </div>
+      <div class="row">
+        <button class="btn" id="brk-new">New</button>
+        <span class="muted counter">Lives: <strong id="brk-lives">3</strong></span>
+        <span class="muted counter">Level: <strong id="brk-level">1</strong></span>
+        <span class="muted counter">Score: <strong id="brk-score">0</strong></span>
+        <span id="brk-status" class="muted status" role="status" aria-live="polite"></span>
       </div>
 
-      <div id="si-grid" class="si-grid" role="group" aria-label="Simon pads">
-        <button class="pad p1" data-pad="0" aria-label="Pad 1"></button>
-        <button class="pad p2" data-pad="1" aria-label="Pad 2"></button>
-        <button class="pad p3" data-pad="2" aria-label="Pad 3"></button>
-        <button class="pad p4" data-pad="3" aria-label="Pad 4"></button>
+      <div class="canvas-wrap">
+        <canvas id="brk-canvas" width="420" height="260" aria-label="Breakout playfield"></canvas>
       </div>
-      <p class="help">Watch, then repeat. Relaxed lets you retry each level.</p>
+      <p class="help">Move the paddle with mouse, arrows/A-D, or drag on touch.</p>
     </article>
   </section>
 
   <footer class="footer">No cookies. No tracking.</footer>
 </main>
-
-<!-- tiny toast -->
-<div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="app.js"></script>
 </body>
