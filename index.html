@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quiet Corner</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<main class="wrap">
+  <header class="header">
+    <h1>Quiet Corner</h1>
+    <p class="sub">Low-key games to zone in. No accounts, no tracking.</p>
+  </header>
+
+  <section class="grid" aria-label="Activities">
+    <!-- 2048 -->
+    <article class="card" aria-labelledby="g2048-title">
+      <div class="card-head">
+        <h2 id="g2048-title">2048</h2>
+        <div class="pill">Slide</div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="g2048-new">New</button>
+        <button class="btn btn-ghost" id="g2048-undo" disabled>Undo</button>
+        <span class="muted counter">Score: <strong id="g2048-score">0</strong></span>
+        <span class="muted counter">Best: <strong id="g2048-best">—</strong></span>
+        <span id="g2048-status" class="muted status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div id="g2048-grid" class="g2048-grid" role="grid" aria-label="2048 board" tabindex="0"></div>
+      <p class="help">Use arrow keys / swipe to slide tiles.</p>
+    </article>
+
+    <!-- Match-3 -->
+    <article class="card" aria-labelledby="m3-title">
+      <div class="card-head">
+        <h2 id="m3-title">Match-3</h2>
+        <div class="pill">Swap</div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="m3-new">New</button>
+        <span class="muted counter">Score: <strong id="m3-score">0</strong></span>
+        <span class="muted counter">Best: <strong id="m3-best">—</strong></span>
+        <span id="m3-status" class="muted status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div id="m3-grid" class="m3-grid" role="grid" aria-label="Match-3 board"></div>
+      <p class="help">Swap two neighbors to make 3+ in a row. Cascades score extra.</p>
+    </article>
+
+    <!-- Simon -->
+    <article class="card" aria-labelledby="si-title">
+      <div class="card-head">
+        <h2 id="si-title">Simon</h2>
+        <div class="pill">Memory</div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="si-start">Start</button>
+        <label class="muted">Mode
+          <select id="si-mode" aria-label="Mode">
+            <option value="relaxed" selected>Relaxed</option>
+            <option value="strict">Strict</option>
+          </select>
+        </label>
+        <span class="muted counter">Level: <strong id="si-level">0</strong></span>
+        <span class="muted counter">Best: <strong id="si-best">0</strong></span>
+        <span id="si-status" class="muted status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div id="si-grid" class="si-grid" role="group" aria-label="Simon pads">
+        <button class="pad p1" data-pad="0" aria-label="Pad 1"></button>
+        <button class="pad p2" data-pad="1" aria-label="Pad 2"></button>
+        <button class="pad p3" data-pad="2" aria-label="Pad 3"></button>
+        <button class="pad p4" data-pad="3" aria-label="Pad 4"></button>
+      </div>
+      <p class="help">Watch, then repeat. Relaxed lets you retry each level.</p>
+    </article>
+  </section>
+
+  <footer class="footer">No cookies. No tracking.</footer>
+</main>
+
+<!-- tiny toast -->
+<div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
