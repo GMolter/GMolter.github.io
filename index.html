@@ -27,14 +27,11 @@
         <span class="muted counter">Best: <strong id="snk-best">0</strong></span>
         <span id="snk-status" class="muted status" role="status" aria-live="polite"></span>
       </div>
-
       <div class="canvas-wrap">
         <canvas id="snk-canvas" width="360" height="360" aria-label="Snake board"></canvas>
       </div>
-
-      <!-- on-screen d-pad for touch -->
       <div class="dpad" aria-hidden="true">
-        <button class="d d-up"   data-dir="up">▲</button>
+        <button class="d d-up" data-dir="up">▲</button>
         <div class="d-row">
           <button class="d d-left" data-dir="left">◀</button>
           <button class="d d-right" data-dir="right">▶</button>
@@ -54,9 +51,9 @@
         <button class="btn" id="msw-new">New</button>
         <label class="muted">Size
           <select id="msw-size" aria-label="Board size">
-            <option value="9,10" selected>9×9 / 10 mines</option>
-            <option value="12,20">12×12 / 20 mines</option>
-            <option value="16,40">16×16 / 40 mines</option>
+            <option value="9,10" selected>9×9 / 10</option>
+            <option value="12,20">12×12 / 20</option>
+            <option value="16,40">16×16 / 40</option>
           </select>
         </label>
         <span class="muted counter">Time: <strong id="msw-time">0</strong>s</span>
@@ -80,17 +77,15 @@
         <span class="muted counter">Score: <strong id="brk-score">0</strong></span>
         <span id="brk-status" class="muted status" role="status" aria-live="polite"></span>
       </div>
-
       <div class="canvas-wrap">
         <canvas id="brk-canvas" width="420" height="260" aria-label="Breakout playfield"></canvas>
       </div>
-      <p class="help">Move the paddle with mouse, arrows/A-D, or drag on touch.</p>
+      <p class="help">Use mouse, A/D or arrows, or drag on touch.</p>
     </article>
   </section>
 
   <footer class="footer">No cookies. No tracking.</footer>
 </main>
-
 <script src="app.js"></script>
 </body>
 </html>
