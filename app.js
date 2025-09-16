@@ -1,416 +1,456 @@
-/* helpers */
+/* Utils */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const toast = (msg, ms=1200)=>{
-  const el = $('#toast'); el.textContent = msg; el.hidden = false;
-  setTimeout(()=> el.hidden = true, ms);
-};
-/* tiny store */
 const store = {
   get(k, d){ try{ return JSON.parse(localStorage.getItem(k)) ?? d; }catch{ return d; } },
   set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
 };
 
-/* ================= 2048 ================= */
+/* ===================== SNAKE ===================== */
 (function(){
-  const gridEl = $('#g2048-grid');
-  const newBtn = $('#g2048-new');
-  const undoBtn = $('#g2048-undo');
-  const scoreEl = $('#g2048-score');
-  const bestEl = $('#g2048-best');
-  const statusEl = $('#g2048-status');
+  const c = $('#snk-canvas');
+  const ctx = c.getContext('2d');
+  const newBtn = $('#snk-new');
+  const pauseBtn = $('#snk-pause');
+  const scoreEl = $('#snk-score');
+  const bestEl = $('#snk-best');
+  const statusEl = $('#snk-status');
+  const dpad = $$('.d');
 
-  const N = 4;
-  let board = Array(N*N).fill(0);
-  let score = 0;
-  let best = store.get('g2048-best', 0);
-  let prev = null;
+  const N = 20; // grid
+  let grid = N;
+  let cell = c.width / N;
+  function resize(){
+    // keep square and crisp
+    const w = c.getBoundingClientRect().width;
+    c.width = Math.round(w);
+    c.height = Math.round(w);
+    cell = c.width / N;
+    draw();
+  }
+  window.addEventListener('resize', resize, {passive:true});
 
-  bestEl.textContent = best || '—';
-
-  function build(){
-    gridEl.style.setProperty('--size', N);
-    gridEl.innerHTML = '';
-    for(let i=0;i<N*N;i++){
-      const c = document.createElement('div');
-      c.className = 'g2048-cell';
-      c.dataset.v = 0;
-      gridEl.appendChild(c);
-    }
-    render();
-  }
-
-  function render(){
-    board.forEach((v,i)=>{
-      const el = gridEl.children[i];
-      el.dataset.v = v;
-      el.textContent = v>0 ? v : '';
-    });
-    scoreEl.textContent = score;
-    undoBtn.disabled = !prev;
-  }
-
-  function emptyCells(){
-    const a=[]; for(let i=0;i<board.length;i++) if(board[i]===0) a.push(i); return a;
-  }
-  function addRandom(){
-    const empties = emptyCells(); if(!empties.length) return;
-    const idx = empties[Math.floor(Math.random()*empties.length)];
-    board[idx] = Math.random()<0.9?2:4;
-  }
-
-  function slideRow(row){
-    // row: number[]
-    const nonzero = row.filter(v=>v);
-    const merged = [];
-    for(let i=0;i<nonzero.length;i++){
-      if(nonzero[i]===nonzero[i+1]){
-        const val = nonzero[i]*2;
-        merged.push(val);
-        score += val;
-        i++;
-      }else merged.push(nonzero[i]);
-    }
-    while(merged.length<N) merged.push(0);
-    return merged;
-  }
-  function rotate(b){ // rotate right
-    const r = Array(N*N).fill(0);
-    for(let r0=0;r0<N;r0++)for(let c=0;c<N;c++){
-      r[c*N + (N-1-r0)] = b[r0*N+c];
-    }
-    return r;
-  }
-  function move(dir){ // 0=left,1=up,2=right,3=down
-    prev = { board:[...board], score };
-    let b = [...board];
-    // rotate so that we always move left
-    for(let i=0;i<dir;i++) b = rotate(b);
-    const rows = [];
-    for(let r=0;r<N;r++) rows.push(b.slice(r*N,(r+1)*N));
-    const slid = rows.map(slideRow).flat();
-    // rotate back
-    let out = slid;
-    for(let i=0;i<(4-dir)%4;i++) out = rotate(out);
-    const changed = out.some((v,i)=>v!==board[i]);
-    if(changed){
-      board = out;
-      addRandom();
-      render();
-      checkState();
-    }else{
-      prev = null; // nothing changed; don't allow undo
-    }
-  }
-
-  function checkState(){
-    if(emptyCells().length) return;
-    // if any move changes, not over
-    for(const d of [0,1,2,3]){
-      const before = [...board], beforeScore=score;
-      move(d);
-      const changed = board.some((v,i)=>v!==before[i]);
-      board = before; score = beforeScore; render(); prev=null;
-      if(changed) return;
-    }
-    statusEl.textContent = 'Game over';
-    if(score>best){ best=score; store.set('g2048-best', best); bestEl.textContent=best; }
-  }
+  let snake, dir, pendingDir, food, score, best, tick, speed, paused, dead;
 
   function reset(){
-    board = Array(N*N).fill(0);
-    score = 0; statusEl.textContent='';
-    addRandom(); addRandom();
-    render();
+    snake = [{x:8,y:10},{x:7,y:10},{x:6,y:10}];
+    dir = {x:1,y:0}; pendingDir = dir;
+    food = spawnFood();
+    score = 0; speed = 110; paused=false; dead=false;
+    scoreEl.textContent = '0';
+    best = store.get('snk-best', 0);
+    bestEl.textContent = best;
+    statusEl.textContent = '';
+    loop();
   }
 
-  // input
-  gridEl.addEventListener('keydown', e=>{
-    const k = e.key;
-    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)){
-      e.preventDefault();
-      const dir = {ArrowLeft:0, ArrowUp:1, ArrowRight:2, ArrowDown:3}[k];
-      move(dir);
+  function spawnFood(){
+    while(true){
+      const x = Math.floor(Math.random()*N), y = Math.floor(Math.random()*N);
+      if(!snake.some(s=>s.x===x && s.y===y)) return {x,y};
     }
-  }, {passive:false});
-  // touch
-  (function swipe(el){
-    let s=null;
-    el.addEventListener('touchstart', e=>{ const t=e.touches[0]; s={x:t.clientX,y:t.clientY}; }, {passive:true});
-    el.addEventListener('touchend', e=>{
-      if(!s) return;
-      const t=e.changedTouches[0]; const dx=t.clientX-s.x, dy=t.clientY-s.y;
-      if(Math.hypot(dx,dy)<20) return; // ignore tap
-      const adx=Math.abs(dx), ady=Math.abs(dy);
-      const dir = adx>ady ? (dx>0?2:0) : (dy>0?3:1);
-      move(dir); s=null;
-    }, {passive:true});
-  })(gridEl);
+  }
+
+  function setDir(nx,ny){
+    // prevent reversing
+    if(dead) return;
+    if((nx===-dir.x && ny===0) || (ny===-dir.y && nx===0)) return;
+    pendingDir = {x:nx, y:ny};
+  }
+
+  // input: keys
+  window.addEventListener('keydown', e=>{
+    const k = e.key.toLowerCase();
+    if(['arrowup','w'].includes(k)) setDir(0,-1);
+    if(['arrowdown','s'].includes(k)) setDir(0,1);
+    if(['arrowleft','a'].includes(k)) setDir(-1,0);
+    if(['arrowright','d'].includes(k)) setDir(1,0);
+    if(k===' '){ togglePause(); }
+  });
+  // input: dpad
+  dpad.forEach(b=> b.addEventListener('click', ()=> {
+    const m = b.dataset.dir;
+    if(m==='up') setDir(0,-1);
+    if(m==='down') setDir(0,1);
+    if(m==='left') setDir(-1,0);
+    if(m==='right') setDir(1,0);
+  }));
+
+  function step(){
+    if(paused || dead) return;
+    dir = pendingDir;
+    const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+    // wall
+    if(head.x<0||head.x>=N||head.y<0||head.y>=N){ gameOver(); return; }
+    // self
+    if(snake.some(s=>s.x===head.x && s.y===head.y)){ gameOver(); return; }
+    snake.unshift(head);
+    if(head.x===food.x && head.y===food.y){
+      score += 10; scoreEl.textContent = score;
+      if(score>store.get('snk-best',0)){ store.set('snk-best', score); bestEl.textContent = score; }
+      food = spawnFood();
+      speed = Math.max(60, speed-2);
+    }else{
+      snake.pop();
+    }
+    draw();
+  }
+
+  function draw(){
+    // bg
+    ctx.fillStyle = '#0d0f0e';
+    ctx.fillRect(0,0,c.width,c.height);
+
+    // grid subtle
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.lineWidth = 1;
+    for(let i=1;i<N;i++){
+      const p = Math.round(i*cell)+.5;
+      ctx.beginPath(); ctx.moveTo(p,0); ctx.lineTo(p,c.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,p); ctx.lineTo(c.width,p); ctx.stroke();
+    }
+
+    // food
+    ctx.fillStyle = '#4ca495';
+    ctx.beginPath();
+    const fx = food.x*cell + cell/2, fy = food.y*cell + cell/2;
+    ctx.arc(fx,fy, cell*0.28, 0, Math.PI*2); ctx.fill();
+
+    // snake
+    ctx.fillStyle = '#e7e7e5';
+    snake.forEach((s,i)=>{
+      const x = Math.round(s.x*cell)+2, y=Math.round(s.y*cell)+2;
+      const size = cell-4;
+      ctx.fillRect(x,y,size,size);
+    });
+
+    if(paused || dead){
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      ctx.fillRect(0,0,c.width,c.height);
+      ctx.fillStyle = '#e7e7e5';
+      ctx.font = '600 22px system-ui, sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(dead?'Game Over':'Paused', c.width/2, c.height/2);
+    }
+  }
+
+  function loop(){
+    clearInterval(tick);
+    tick = setInterval(step, speed);
+    draw();
+  }
+
+  function gameOver(){
+    dead = true;
+    clearInterval(tick);
+    statusEl.textContent = 'Game over';
+    draw();
+  }
+
+  function togglePause(){
+    if(dead) return;
+    paused = !paused;
+    $('#snk-pause').textContent = paused ? 'Resume' : 'Pause';
+    if(!paused) loop(); else draw();
+  }
 
   newBtn.addEventListener('click', reset);
-  undoBtn.addEventListener('click', ()=>{
-    if(!prev) return;
-    board = prev.board; score = prev.score; prev=null; statusEl.textContent='';
-    render();
-  });
+  pauseBtn.addEventListener('click', togglePause);
 
-  build(); reset();
+  resize();
+  reset();
 })();
 
-/* ================= Match-3 ================= */
+/* ===================== MINESWEEPER ===================== */
 (function(){
-  const gridEl = $('#m3-grid');
-  const newBtn = $('#m3-new');
-  const scoreEl = $('#m3-score');
-  const bestEl = $('#m3-best');
-  const statusEl = $('#m3-status');
+  const gridEl = $('#msw-grid');
+  const newBtn = $('#msw-new');
+  const sizeSel = $('#msw-size');
+  const timeEl = $('#msw-time');
+  const minesEl = $('#msw-mines');
+  const statusEl = $('#msw-status');
 
-  const N = 8, TYPES = 6;
-  let board = []; // numbers 0..TYPES-1
-  let score = 0, best = store.get('m3-best', 0);
-  let sel = null; // index
+  let W=9, H=9, M=10;
+  let board=[], open=[], flag=[];
+  let started=false, over=false, timer=null, secs=0;
 
-  bestEl.textContent = best || '—';
-
-  function idx(r,c){return r*N+c}
-  function rc(i){return [Math.floor(i/N), i%N]}
-
-  function build(){
-    gridEl.style.setProperty('--size', N);
+  function setup(){
+    gridEl.style.gridTemplateColumns = `repeat(${W},1fr)`;
     gridEl.innerHTML='';
-    for(let i=0;i<N*N;i++){
+    board = Array(W*H).fill(0);
+    open  = Array(W*H).fill(false);
+    flag  = Array(W*H).fill(false);
+    secs=0; timeEl.textContent='0'; statusEl.textContent=''; over=false; started=false;
+    minesEl.textContent = M;
+    for(let i=0;i<W*H;i++){
       const b = document.createElement('button');
-      b.className='m3-cell'; b.setAttribute('aria-label', 'Gem');
-      b.addEventListener('click', ()=> onSelect(i));
+      b.className='msw-cell';
+      b.setAttribute('aria-label','Hidden cell');
+      // mouse
+      b.addEventListener('click', e=> reveal(i));
+      b.addEventListener('contextmenu', e=>{ e.preventDefault(); toggleFlag(i); });
+      // long press to flag on touch
+      let t=null;
+      b.addEventListener('touchstart', e=>{ t=setTimeout(()=>{ toggleFlag(i); }, 450); }, {passive:true});
+      b.addEventListener('touchend', e=>{ clearTimeout(t); }, {passive:true});
       gridEl.appendChild(b);
     }
   }
 
-  function fillRandom(){
-    board = Array(N*N).fill(0).map(()=>Math.floor(Math.random()*TYPES));
-    // ensure no immediate matches to start
-    while(findMatches().length){ shuffleBoard(); }
+  function placeMines(safeIndex){
+    // place avoiding the first clicked tile and its neighbors
+    const avoid = new Set([safeIndex, ...neighbors(safeIndex)]);
+    let left = M;
+    while(left>0){
+      const i = Math.floor(Math.random()*W*H);
+      if(board[i]===-1 || avoid.has(i)) continue;
+      board[i]=-1; left--;
+    }
+    // numbers
+    for(let i=0;i<W*H;i++){
+      if(board[i]===-1) continue;
+      board[i] = neighbors(i).filter(n=>board[n]===-1).length;
+    }
+  }
+
+  function neighbors(i){
+    const r = Math.floor(i/W), c=i%W, list=[];
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0) continue;
+      const rr=r+dr, cc=c+dc;
+      if(rr>=0&&rr<H&&cc>=0&&cc<W) list.push(rr*W+cc);
+    }
+    return list;
+  }
+
+  function reveal(i){
+    if(over||flag[i]||open[i]) return;
+    if(!started){ placeMines(i); startTimer(); started=true; }
+    if(board[i]===-1){ // boom
+      open[i]=true; over=true; stopTimer(); showAll(true); statusEl.textContent='Boom 💥';
+      return;
+    }
+    flood(i);
+    render();
+    checkWin();
+  }
+
+  function flood(i){
+    const stack=[i];
+    while(stack.length){
+      const k = stack.pop();
+      if(open[k]||flag[k]) continue;
+      open[k]=true;
+      if(board[k]===0) neighbors(k).forEach(n=>{ if(!open[n]) stack.push(n); });
+    }
+  }
+
+  function toggleFlag(i){
+    if(over||open[i]) return;
+    flag[i] = !flag[i];
     render();
   }
 
   function render(){
-    board.forEach((v,i)=>{
+    for(let i=0;i<W*H;i++){
       const el = gridEl.children[i];
-      el.className = 'm3-cell m3-type-'+v + (sel===i?' selected':'');
-    });
-    scoreEl.textContent = score;
-  }
-
-  function neighbors(i){
-    const [r,c]=rc(i), out=[];
-    if(r>0) out.push(idx(r-1,c));
-    if(r<N-1) out.push(idx(r+1,c));
-    if(c>0) out.push(idx(r,c-1));
-    if(c<N-1) out.push(idx(r,c+1));
-    return out;
-  }
-
-  function swap(i,j){
-    [board[i],board[j]]=[board[j],board[i]];
-  }
-
-  function onSelect(i){
-    if(sel===null){ sel=i; render(); return; }
-    if(i===sel){ sel=null; render(); return; }
-    if(!neighbors(sel).includes(i)){ sel=i; render(); return; }
-    // tentative swap
-    swap(sel,i);
-    const matches = findMatches();
-    if(!matches.length){
-      // revert if no match
-      swap(sel,i); toast('No match'); sel=null; render(); return;
-    }
-    // resolve cascade
-    resolve(matches);
-    sel=null;
-  }
-
-  function findMatches(){
-    const m = new Set();
-    // rows
-    for(let r=0;r<N;r++){
-      let run=1;
-      for(let c=1;c<N;c++){
-        if(board[idx(r,c)]===board[idx(r,c-1)]) run++; else{ if(run>=3) for(let k=1;k<=run;k++) m.add(idx(r,c-k)); run=1; }
-      }
-      if(run>=3) for(let k=0;k<run;k++) m.add(idx(r,N-1-k));
-    }
-    // cols
-    for(let c=0;c<N;c++){
-      let run=1;
-      for(let r=1;r<N;r++){
-        if(board[idx(r,c)]===board[idx(r-1,c)]) run++; else{ if(run>=3) for(let k=1;k<=run;k++) m.add(idx(r-k,c)); run=1; }
-      }
-      if(run>=3) for(let k=0;k<run;k++) m.add(idx(N-1-k,c));
-    }
-    return [...m];
-  }
-
-  function resolve(matches){
-    let chain=0;
-    (function step(){
-      if(!matches.length){ // after last clear, check for new matches from gravity
-        // gravity
-        for(let c=0;c<N;c++){
-          const col=[];
-          for(let r=0;r<N;r++) col.push(board[idx(r,c)]);
-          const filtered = col.filter(v=>v!==null);
-          const holes = N - filtered.length;
-          const newgems = Array(holes).fill(0).map(()=>Math.floor(Math.random()*TYPES));
-          const newcol = Array(holes).fill(null).concat(filtered); // null as holes first
-          for(let r=0;r<N;r++) board[idx(r,c)] = newcol[r]===null ? newgems.shift() : newcol[r];
-        }
-        const next = findMatches();
-        if(next.length){ matches = next; chain++; setTimeout(step, 80); return; }
-        if(chain>0) toast('Chain x'+(chain+1));
-        render();
-        if(score>best){ best=score; store.set('m3-best',best); bestEl.textContent=best; }
-        if(!hasMoves()){ shuffleBoard(); statusEl.textContent='Shuffled'; }
-        return;
-      }
-      // clear matched -> score
-      matches.forEach(i=>{ board[i]=null; });
-      score += 10*matches.length;
-      render();
-      setTimeout(step, 80);
-    })();
-  }
-
-  function hasMoves(){
-    // look for any swap creating a match (rough check)
-    for(let i=0;i<N*N;i++){
-      for(const j of neighbors(i)){
-        swap(i,j);
-        const ok = findMatches().length>0;
-        swap(i,j);
-        if(ok) return true;
+      el.classList.toggle('open', open[i]);
+      el.classList.toggle('flag', flag[i]);
+      el.classList.toggle('disabled', over);
+      if(open[i]){
+        el.textContent = board[i]>0 ? board[i] : '';
+        el.style.color = numberColor(board[i]);
+      }else{
+        el.textContent = '';
       }
     }
-    return false;
+    minesEl.textContent = M - flag.filter(Boolean).length;
   }
 
-  function shuffleBoard(){
-    // keep colors but permute until there is a move and no immediate matches
-    const colors=[...board];
-    let tries=0;
-    do{
-      for(let i=colors.length-1;i>0;i--){
-        const j=Math.floor(Math.random()*(i+1)); [colors[i],colors[j]]=[colors[j],colors[i]];
-      }
-      board=[...colors]; tries++;
-      if(tries>200){ fillRandom(); return; }
-    }while(findMatches().length || !hasMoves());
+  function numberColor(n){
+    return ({
+      1:'#9cd7cb', 2:'#d8c78f', 3:'#e99f9f', 4:'#bda6e6',
+      5:'#f2b177', 6:'#a0d1f2', 7:'#cccccc', 8:'#aaaaaa'
+    })[n] || '#e7e7e5';
+  }
+
+  function showAll(hitBomb=false){
+    for(let i=0;i<W*H;i++){
+      if(board[i]===-1) gridEl.children[i].classList.add('bomb');
+      open[i]=true;
+    }
     render();
   }
 
-  newBtn.addEventListener('click', ()=>{ score=0; statusEl.textContent=''; fillRandom(); });
+  function checkWin(){
+    const safe = W*H - M;
+    const opened = open.filter(Boolean).length;
+    if(opened>=safe){
+      over=true; stopTimer(); statusEl.textContent='Cleared ✔︎';
+      showAll();
+    }
+  }
 
-  build(); fillRandom();
+  function startTimer(){
+    clearInterval(timer);
+    timer = setInterval(()=>{ secs++; timeEl.textContent = secs; }, 1000);
+  }
+  function stopTimer(){ clearInterval(timer); }
+
+  newBtn.addEventListener('click', ()=>{ stopTimer(); setup(); });
+  sizeSel.addEventListener('change', ()=>{
+    const [w,m] = sizeSel.value.split(',').map(Number);
+    W = H = w; M = m; stopTimer(); setup();
+  });
+
+  setup();
 })();
 
-/* ================= Simon ================= */
+/* ===================== BREAKOUT ===================== */
 (function(){
-  const pads = $$('#si-grid .pad');
-  const startBtn = $('#si-start');
-  const modeSel = $('#si-mode');
-  const levelEl = $('#si-level');
-  const bestEl = $('#si-best');
-  const statusEl = $('#si-status');
+  const c = $('#brk-canvas');
+  const ctx = c.getContext('2d');
+  const newBtn = $('#brk-new');
+  const livesEl = $('#brk-lives');
+  const levelEl = $('#brk-level');
+  const scoreEl = $('#brk-score');
+  const statusEl = $('#brk-status');
 
-  let seq = [];
-  let inputIndex = 0;
-  let playingBack = false;
-  let best = store.get('si-best', 0);
-  bestEl.textContent = best;
+  let paddle, ball, bricks, cols, rows, running, lives, level, score, raf;
 
-  // gentle tones
-  const ctx = new (window.AudioContext||window.webkitAudioContext)();
-  const freqs = [392, 440, 494, 523]; // G4 A4 B4 C5
-  function tone(i, ms=350){
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.value = freqs[i]; o.type='sine';
-    o.connect(g).connect(ctx.destination);
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime+0.01);
-    o.start();
-    setTimeout(()=>{
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.02);
-      setTimeout(()=>o.stop(), 20);
-    }, ms);
+  function reset(levelUp=false){
+    lives = levelUp ? lives : 3;
+    level = levelUp ? level+1 : 1;
+    score = levelUp ? score : 0;
+    setupLevel();
+    draw();
+    play();
   }
 
-  function light(i, ms=350){
-    pads[i].classList.add('lit'); tone(i, ms);
-    setTimeout(()=> pads[i].classList.remove('lit'), ms);
-  }
-
-  pads.forEach(p=>{
-    p.addEventListener('click', async ()=>{
-      if(playingBack) return;
-      await ctx.resume().catch(()=>{});
-      const i = Number(p.dataset.pad);
-      light(i, 220);
-      if(seq.length===0) return;
-      if(i===seq[inputIndex]){
-        inputIndex++;
-        if(inputIndex===seq.length){
-          // level complete
-          const lvl = seq.length;
-          if(lvl>best){ best=lvl; store.set('si-best',best); bestEl.textContent=best; }
-          levelEl.textContent = lvl;
-          statusEl.textContent = 'Nice.';
-          setTimeout(next, 600);
-        }
-      }else{
-        // fail
-        statusEl.textContent = 'Oops.';
-        if(modeSel.value==='strict'){ reset(); }
-        else{
-          inputIndex = 0;
-          setTimeout(playback, 700);
-        }
+  function setupLevel(){
+    const w = c.getBoundingClientRect().width;
+    c.width = Math.round(w);
+    c.height = Math.round(w*0.62);
+    paddle = { w: Math.max(50, c.width*0.16 - level*6), h: 12, x: c.width/2, y: c.height-18, vx:0 };
+    ball = { x:c.width/2, y:c.height/2, r:6, vx: 2.4 + level*0.3, vy: -2.6 - level*0.3, speed: 1 };
+    cols = 9; rows = 4 + Math.min(level-1, 3);
+    bricks = [];
+    const pad=10, bw=(c.width - pad*(cols+1))/cols, bh=18;
+    for(let r=0;r<rows;r++){
+      for(let col=0; col<cols; col++){
+        bricks.push({x: pad + col*(bw+pad), y: 50 + r*(bh+pad), w:bw, h:bh, alive:true});
       }
-    });
+    }
+    livesEl.textContent = lives;
+    levelEl.textContent = level;
+    scoreEl.textContent = score;
+    statusEl.textContent = '';
+  }
+  window.addEventListener('resize', ()=>{ setupLevel(); draw(); }, {passive:true});
+
+  // input
+  let mouseX = null, dragging=false;
+  c.addEventListener('mousemove', e=>{
+    const r = c.getBoundingClientRect();
+    mouseX = e.clientX - r.left;
+  }, {passive:true});
+  c.addEventListener('touchstart', e=>{ dragging=true; }, {passive:true});
+  c.addEventListener('touchmove', e=>{
+    const r = c.getBoundingClientRect();
+    mouseX = e.touches[0].clientX - r.left; e.preventDefault();
+  }, {passive:false});
+  c.addEventListener('touchend', ()=>{ dragging=false; }, {passive:true});
+  window.addEventListener('keydown', e=>{
+    if(e.key==='ArrowLeft' || e.key.toLowerCase()==='a') paddle.vx = -6;
+    if(e.key==='ArrowRight' || e.key.toLowerCase()==='d') paddle.vx = 6;
+  });
+  window.addEventListener('keyup', e=>{
+    if(['ArrowLeft','ArrowRight','a','d','A','D'].includes(e.key)) paddle.vx = 0;
   });
 
-  function randPad(){ return Math.floor(Math.random()*4); }
+  function update(){
+    // paddle follow
+    if(mouseX!=null) paddle.x = mouseX;
+    paddle.x += paddle.vx;
+    paddle.x = Math.max(paddle.w/2, Math.min(c.width - paddle.w/2, paddle.x));
 
-  function next(){
-    seq.push(randPad());
-    inputIndex = 0;
-    playback();
+    // ball
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    if(ball.x-ball.r<0 || ball.x+ball.r>c.width) ball.vx *= -1;
+    if(ball.y-ball.r<0) ball.vy *= -1;
+
+    // paddle collision
+    if(ball.y+ball.r > paddle.y && ball.y+ball.r < paddle.y+paddle.h &&
+       ball.x > paddle.x-paddle.w/2 && ball.x < paddle.x+paddle.w/2){
+      ball.vy = -Math.abs(ball.vy);
+      const off = (ball.x - paddle.x)/(paddle.w/2);
+      ball.vx = (2.8 + level*0.2) * off;
+    }
+
+    // bricks
+    for(const b of bricks){
+      if(!b.alive) continue;
+      if(ball.x> b.x && ball.x < b.x+b.w && ball.y> b.y && ball.y < b.y+b.h){
+        b.alive=false; score+=10; scoreEl.textContent=score;
+        // reflect based on entry
+        const left = Math.abs(ball.x - b.x);
+        const right= Math.abs(ball.x - (b.x+b.w));
+        const top  = Math.abs(ball.y - b.y);
+        const bottom=Math.abs(ball.y - (b.y+b.h));
+        const m = Math.min(left,right,top,bottom);
+        if(m===left||m===right) ball.vx*=-1; else ball.vy*=-1;
+        break;
+      }
+    }
+
+    // lose life
+    if(ball.y-ball.r>c.height){
+      lives--; livesEl.textContent = lives;
+      if(lives<=0){ statusEl.textContent='Game over'; stop(); return; }
+      // reset ball
+      ball.x=c.width/2; ball.y=c.height/2; ball.vx=2.4+level*0.3; ball.vy=-2.6-level*0.3;
+    }
+
+    // next level
+    if(bricks.every(b=>!b.alive)){
+      stop();
+      statusEl.textContent='Level up';
+      setTimeout(()=>{ reset(true); }, 600);
+    }
   }
 
-  function playback(){
-    playingBack = true;
-    let i=0;
-    const t = setInterval(()=>{
-      if(i>=seq.length){ clearInterval(t); playingBack=false; statusEl.textContent='Your turn'; return; }
-      light(seq[i], Math.max(140, 420 - seq.length*10));
-      i++;
-    }, Math.max(240, 540 - seq.length*12));
+  function draw(){
+    ctx.fillStyle = '#0d0f0e';
+    ctx.fillRect(0,0,c.width,c.height);
+
+    // bricks
+    for(const b of bricks){
+      if(!b.alive) continue;
+      ctx.fillStyle = '#1a1f1d'; ctx.fillRect(b.x,b.y,b.w,b.h);
+      ctx.strokeStyle = '#2a2e2b'; ctx.strokeRect(b.x+.5,b.y+.5,b.w-1,b.h-1);
+    }
+
+    // paddle
+    ctx.fillStyle = '#e7e7e5';
+    ctx.fillRect(paddle.x-paddle.w/2, paddle.y, paddle.w, paddle.h);
+
+    // ball
+    ctx.fillStyle = '#4ca495';
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
   }
 
-  function reset(){
-    seq = []; inputIndex=0; levelEl.textContent='0'; statusEl.textContent='';
+  function frame(){
+    update(); draw();
+    raf = requestAnimationFrame(frame);
   }
 
-  startBtn.addEventListener('click', async ()=>{
-    await ctx.resume().catch(()=>{});
-    reset(); next();
-  });
-})();
+  function play(){ running=true; cancelAnimationFrame(raf); raf=requestAnimationFrame(frame); }
+  function stop(){ running=false; cancelAnimationFrame(raf); }
 
-/* a11y nicety: keyboard focus styles for mouse users only when tabbing */
-(function(){
-  function onFirstTab(e){
-    if(e.key==='Tab'){ document.body.classList.add('kbd'); window.removeEventListener('keydown', onFirstTab); }
-  }
-  window.addEventListener('keydown', onFirstTab);
+  newBtn.addEventListener('click', ()=>{ stop(); reset(false); });
+
+  // init
+  reset(false);
 })();
